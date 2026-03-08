@@ -8,3 +8,6 @@
 #define OLED_ADDR_1     0x3D
 #define OLED_ADDR_2     0x3C
 #define VL53L0X_ADDR    0x29
+
+/* Set to 0 to skip DataInit (0x89, 0x88). */
+#define VL53L0X_USE_INIT 1

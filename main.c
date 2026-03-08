@@ -57,6 +57,12 @@ int main(void) {
 
     printf("VL53L0X OK at 0x%02X\n", VL53L0X_ADDR);
 
+#if VL53L0X_USE_INIT
+    if (!vl53l0x_init()) {
+        printf("VL53L0X init failed (continuing anyway)\n");
+    }
+#endif
+
     uint8_t model = 0, rev = 0;
     if (vl53l0x_read_id(&model, &rev)) {
         printf("VL53L0X ID: model=0x%02X rev=0x%02X\n", model, rev);
