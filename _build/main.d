@@ -64,4 +64,4 @@ _build/main.o: main.c \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/modules/nrfx/drivers/nrfx_errors.h \
  /Users/devan/cs346/nu-microbit-base/software/boards/microbit_v2/./microbit_v2.h \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/modules/nrfx/hal/nrf_gpio.h \
- hw_config.h i2c_simple.h oled_64x48.h vl53l0x_min.h
+ hw_config.h i2c_simple.h
