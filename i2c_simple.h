@@ -4,6 +4,8 @@
 #include <stdint.h>
 
 bool i2c_init_bus(void);
+void i2c_deinit_bus(void);
+bool i2c_init_bus_with_pins(uint32_t scl_pin, uint32_t sda_pin);
 bool i2c_probe(uint8_t addr7);
 bool i2c_write_bytes(uint8_t addr7, const uint8_t* data, uint32_t len);
 bool i2c_write_reg8(uint8_t addr7, uint8_t reg, uint8_t value);

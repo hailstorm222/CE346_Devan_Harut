@@ -63,4 +63,5 @@ _build/vl53l0x_min.o: vl53l0x_min.c vl53l0x_min.h \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/modules/nrfx/soc/nrfx_atomic.h \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/components/libraries/util/sdk_errors.h \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/components/libraries/util/sdk_resources.h \
- ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/modules/nrfx/drivers/nrfx_errors.h
+ ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/modules/nrfx/drivers/nrfx_errors.h \
+ ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/components/libraries/delay/nrf_delay.h

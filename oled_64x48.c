@@ -6,8 +6,9 @@
 
 #include "i2c_simple.h"
 
-#define OLED_W 64
-#define OLED_H 48
+/* SparkFun Qwiic OLED 1.3" (LCD-23453) is 128x64 */
+#define OLED_W 128
+#define OLED_H 64
 #define OLED_PAGES (OLED_H / 8)
 
 static uint8_t g_addr = 0;
@@ -90,24 +91,25 @@ static bool oled_cmd_list(const uint8_t* cmds, uint32_t len) {
 }
 
 bool oled_begin(uint8_t addr7) {
+    /* SSD1306 init for 128x64 */
     static const uint8_t init_seq[] = {
-        0xAE,
-        0xD5, 0x80,
-        0xA8, 0x2F,
-        0xD3, 0x00,
-        0x40,
-        0x8D, 0x14,
-        0x20, 0x00,
-        0xA1,
-        0xC8,
-        0xDA, 0x12,
-        0x81, 0x8F,
-        0xD9, 0xF1,
-        0xDB, 0x40,
-        0xA4,
-        0xA6,
-        0x2E,
-        0xAF
+        0xAE,       /* display off */
+        0xD5, 0x80, /* clock div */
+        0xA8, 0x3F, /* multiplex: 63 for 64 rows */
+        0xD3, 0x00, /* display offset */
+        0x40,       /* start line 0 */
+        0x8D, 0x14, /* charge pump */
+        0x20, 0x00, /* horizontal addressing */
+        0xA1,       /* segment remap */
+        0xC8,       /* com scan dir */
+        0xDA, 0x12, /* com pins */
+        0x81, 0x8F, /* contrast */
+        0xD9, 0xF1, /* precharge */
+        0xDB, 0x40, /* vcomh */
+        0xA4,       /* display all on resume */
+        0xA6,       /* normal (not inverted) */
+        0x2E,       /* deactivate scroll */
+        0xAF        /* display on */
     };
 
     g_addr = addr7;
@@ -150,12 +152,14 @@ void oled_draw_string(uint8_t x, uint8_t page, const char* s) {
 }
 
 bool oled_display(void) {
+    /* Column range 0-127 */
     if (!oled_cmd(0x21)) return false;
     if (!oled_cmd(0x00)) return false;
-    if (!oled_cmd(0x3F)) return false;
+    if (!oled_cmd(0x7F)) return false;
+    /* Page range 0-7 */
     if (!oled_cmd(0x22)) return false;
     if (!oled_cmd(0x00)) return false;
-    if (!oled_cmd(0x05)) return false;
+    if (!oled_cmd(0x07)) return false;
 
     return oled_data(g_fb, sizeof(g_fb));
 }
