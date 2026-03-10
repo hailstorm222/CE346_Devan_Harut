@@ -29,3 +29,12 @@
 #define ENC_PIN_A   EDGE_P8   /* Phase A / CLK */
 #define ENC_PIN_B   EDGE_P9   /* Phase B / DT  */
 #define ENC_PIN_SW  EDGE_P12  /* Push button (active-low) */
+
+/*
+ * Capacitive touch pads for DJ controls.
+ * Default wiring assumes one digital touch output per pad.
+ * Add or change these as you wire more pads.
+ */
+#define TOUCH_PIN_0 EDGE_P0
+#define TOUCH_PIN_1 EDGE_P1
+#define TOUCH_PIN_2 EDGE_P2
