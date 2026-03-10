@@ -9,8 +9,9 @@
 #include "i2c_simple.h"
 #include "oled_64x48.h"
 #include "vl53l0x_min.h"
+#include "rotary_encoder.h"
 
-#define LINE_BUF_SIZE 16
+#define LINE_BUF_SIZE 20
 
 int main(void) {
     printf("CE346 OLED + TOF test\n\n");
@@ -68,31 +69,44 @@ int main(void) {
         printf("VL53L0X ID: model=0x%02X rev=0x%02X\n", model, rev);
     }
 
-    /* Main loop: read TOF distance, display on OLED and serial */
+    /* Rotary encoder: P8 (A), P9 (B), P12 (button). See hw_config.h for wiring. */
+    rotary_encoder_init();
+    printf("Rotary encoder init (P8=A, P9=B, P12=SW)\n");
+
+    /* Main loop: poll encoder, read TOF, display on OLED and serial */
     uint16_t distance_mm = 0;
     char line[LINE_BUF_SIZE];
 
     while (1) {
+        rotary_encoder_poll();
+
+        uint8_t pos = rotary_encoder_get_position();  /* 0–23, top = 0, wraps */
+        bool btn = rotary_encoder_button_pressed();   /* select button */
+
         if (vl53l0x_read_distance_mm(&distance_mm)) {
-            printf("Distance: %u mm\n", distance_mm);
+            printf("TOF: %u mm  Pos: %u  Select: %s\n",
+                   (unsigned)distance_mm, (unsigned)pos, btn ? "ON" : "off");
 
             if (oled_ok) {
                 oled_clear();
                 oled_draw_string(0, 0, "TOF SENSOR");
                 snprintf(line, sizeof(line), "%u mm", distance_mm);
                 oled_draw_string(0, 1, line);
+                snprintf(line, sizeof(line), "Pos %u %s", (unsigned)pos, btn ? "[SEL]" : "");
+                oled_draw_string(0, 2, line);
                 oled_display();
             }
         } else {
-            printf("TOF read failed\n");
+            printf("TOF read failed  Pos: %u  Select: %s\n", (unsigned)pos, btn ? "ON" : "off");
             if (oled_ok) {
                 oled_clear();
-                oled_draw_string(0, 0, "TOF READ");
-                oled_draw_string(0, 1, "FAIL");
+                oled_draw_string(0, 0, "TOF READ FAIL");
+                snprintf(line, sizeof(line), "Pos %u %s", (unsigned)pos, btn ? "[SEL]" : "");
+                oled_draw_string(0, 1, line);
                 oled_display();
             }
         }
 
-        nrf_delay_ms(200);
+        nrf_delay_ms(100);
     }
 }
