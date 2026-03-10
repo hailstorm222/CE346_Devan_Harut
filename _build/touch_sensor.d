@@ -1,5 +1,6 @@
-_build/main.o: main.c \
+_build/touch_sensor.o: touch_sensor.c touch_sensor.h \
  /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/lib/gcc/arm-none-eabi/14.2.1/include/stdbool.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/lib/gcc/arm-none-eabi/14.2.1/include/stddef.h \
  /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/lib/gcc/arm-none-eabi/14.2.1/include/stdint.h \
  /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/stdint.h \
  /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/machine/_default_types.h \
@@ -7,21 +8,7 @@ _build/main.o: main.c \
  /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/_newlib_version.h \
  /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/_intsup.h \
  /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/_stdint.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/stdio.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/_ansi.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/newlib.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/config.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/machine/ieeefp.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/cdefs.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/lib/gcc/arm-none-eabi/14.2.1/include/stddef.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/lib/gcc/arm-none-eabi/14.2.1/include/stdarg.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/reent.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/_ansi.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/_types.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/machine/_types.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/lock.h \
- /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/stdio.h \
- ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/components/libraries/delay/nrf_delay.h \
+ ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/modules/nrfx/hal/nrf_gpio.h \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/modules/nrfx/nrfx.h \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/integration/nrfx/nrfx_config.h \
  ../../nrf52x-base//make/config/nrf52833/config/sdk_config.h \
@@ -54,6 +41,19 @@ _build/main.o: main.c \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/components/libraries/util/app_util_platform.h \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/components/libraries/util/nrf_assert.h \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/components/libraries/util/app_error.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/stdio.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/_ansi.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/newlib.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/config.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/machine/ieeefp.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/cdefs.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/lib/gcc/arm-none-eabi/14.2.1/include/stdarg.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/reent.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/_ansi.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/_types.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/machine/_types.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/lock.h \
+ /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/arm-none-eabi/include/sys/stdio.h \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/components/libraries/util/sdk_errors.h \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/components/drivers_nrf/nrf_soc_nosd/nrf_error.h \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/components/libraries/util/app_error_weak.h \
@@ -61,8 +61,4 @@ _build/main.o: main.c \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/modules/nrfx/soc/nrfx_atomic.h \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/components/libraries/util/sdk_errors.h \
  ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/components/libraries/util/sdk_resources.h \
- ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/modules/nrfx/drivers/nrfx_errors.h \
- /Users/devan/cs346/nu-microbit-base/software/boards/microbit_v2/./microbit_v2.h \
- ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/modules/nrfx/hal/nrf_gpio.h \
- hw_config.h i2c_simple.h oled_64x48.h vl53l0x_min.h rotary_encoder.h \
- touch_sensor.h
+ ../../nrf52x-base//sdk/nrf5_sdk_16.0.0/modules/nrfx/drivers/nrfx_errors.h
