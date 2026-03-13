@@ -166,6 +166,23 @@ class AudioEngine:
             state = self._effect_states[self._active_effect]
             state["enabled"] = bool(enabled)
 
+    def get_playing_pads(self) -> tuple[bool, bool, bool, bool]:
+        """Return which pads currently have an active voice (playing or looping)."""
+        with self._lock:
+            out = [False, False, False, False]
+            for v in self._voices:
+                if 0 <= v.slice_id < 4:
+                    out[v.slice_id] = True
+            return tuple(out)
+
+    def get_effect_states(self) -> dict[str, dict[str, float | bool]]:
+        """Return a copy of effect name -> {depth, enabled} for display."""
+        with self._lock:
+            return {
+                name: {"depth": s["depth"], "enabled": s["enabled"]}
+                for name, s in self._effect_states.items()
+            }
+
     def _reset_effect_buffers(self) -> None:
         self._filter_state.fill(0.0)
         self._delay_buffer.fill(0.0)
@@ -261,52 +278,75 @@ class AudioEngine:
         return out
 
     def _apply_filter(self, mix: np.ndarray, depth: float) -> np.ndarray:
-        alpha = 0.5 - (0.42 * depth)
-        alpha = float(np.clip(alpha, 0.04, 0.5))
-        out = np.empty_like(mix)
-        state = self._filter_state.copy()
-
-        for i in range(mix.shape[0]):
-            state = state + alpha * (mix[i] - state)
-            out[i] = state
-
-        self._filter_state = state
-        dry = 1.0 - (0.35 * depth)
-        wet = 0.3 + (0.7 * depth)
-        return (dry * mix) + (wet * out)
+        """Overdrive/saturation filter - more noticeable than subtle low-pass."""
+        # Map depth 0..1 to drive amount: gentle saturation to heavy distortion
+        drive = 1.0 + 8.0 * depth  # 1x to 9x gain before clipping
+        # Soft-clip using tanh for warm overdrive
+        driven = np.tanh(mix * drive)
+        # Blend dry/wet: more depth = more saturated sound
+        wet = 0.3 + 0.7 * depth
+        return (1.0 - wet) * mix + wet * driven
 
     def _apply_delay(self, mix: np.ndarray, depth: float) -> np.ndarray:
-        wet = 0.15 + (0.55 * depth)
-        feedback = 0.15 + (0.45 * depth)
-        delay_samples = int(self.sample_rate * (0.08 + (0.24 * depth)))
-        out = np.copy(mix)
+        """Vectorized delay effect for better performance."""
+        wet = 0.15 + 0.55 * depth
+        feedback = 0.15 + 0.45 * depth
+        delay_samples = int(self.sample_rate * (0.08 + 0.24 * depth))
+        n_frames = mix.shape[0]
+        buf_len = self._delay_buffer.shape[0]
 
-        for i in range(mix.shape[0]):
-            read_index = (self._delay_index - delay_samples) % self._delay_buffer.shape[0]
-            delayed = self._delay_buffer[read_index]
-            out[i] = (1.0 - wet) * mix[i] + wet * delayed
-            self._delay_buffer[self._delay_index] = mix[i] + feedback * delayed
-            self._delay_index = (self._delay_index + 1) % self._delay_buffer.shape[0]
+        # Build index arrays for reading from delay buffer
+        start_idx = self._delay_index
+        read_indices = (np.arange(n_frames) + start_idx - delay_samples) % buf_len
+        write_indices = (np.arange(n_frames) + start_idx) % buf_len
 
+        # Read delayed samples
+        delayed = self._delay_buffer[read_indices]
+
+        # Compute output
+        out = (1.0 - wet) * mix + wet * delayed
+
+        # Write to delay buffer (mix + feedback * delayed)
+        self._delay_buffer[write_indices] = mix + feedback * delayed
+
+        # Update index
+        self._delay_index = (start_idx + n_frames) % buf_len
         return out
 
     def _apply_reverb(self, mix: np.ndarray, depth: float) -> np.ndarray:
-        wet = 0.1 + (0.35 * depth)
-        feedback = 0.2 + (0.25 * depth)
+        """Vectorized reverb effect for better performance."""
+        wet = 0.1 + 0.35 * depth
+        feedback = 0.2 + 0.25 * depth
         tap_a = int(self.sample_rate * 0.031)
         tap_b = int(self.sample_rate * 0.047)
         tap_c = int(self.sample_rate * 0.071)
-        out = np.copy(mix)
+        n_frames = mix.shape[0]
+        buf_len = self._reverb_buffer.shape[0]
+        start_idx = self._reverb_index
 
-        for i in range(mix.shape[0]):
-            delayed_a = self._reverb_buffer[(self._reverb_index - tap_a) % self._reverb_buffer.shape[0]]
-            delayed_b = self._reverb_buffer[(self._reverb_index - tap_b) % self._reverb_buffer.shape[0]]
-            delayed_c = self._reverb_buffer[(self._reverb_index - tap_c) % self._reverb_buffer.shape[0]]
-            reverb_mix = (0.5 * delayed_a) + (0.3 * delayed_b) + (0.2 * delayed_c)
-            out[i] = (1.0 - wet) * mix[i] + wet * reverb_mix
-            self._reverb_buffer[self._reverb_index] = mix[i] + feedback * reverb_mix
-            self._reverb_index = (self._reverb_index + 1) % self._reverb_buffer.shape[0]
+        # Build index arrays for the three delay taps
+        base_indices = np.arange(n_frames) + start_idx
+        indices_a = (base_indices - tap_a) % buf_len
+        indices_b = (base_indices - tap_b) % buf_len
+        indices_c = (base_indices - tap_c) % buf_len
+        write_indices = base_indices % buf_len
 
+        # Read from reverb buffer
+        delayed_a = self._reverb_buffer[indices_a]
+        delayed_b = self._reverb_buffer[indices_b]
+        delayed_c = self._reverb_buffer[indices_c]
+
+        # Combine taps
+        reverb_mix = 0.5 * delayed_a + 0.3 * delayed_b + 0.2 * delayed_c
+
+        # Compute output
+        out = (1.0 - wet) * mix + wet * reverb_mix
+
+        # Write to reverb buffer
+        self._reverb_buffer[write_indices] = mix + feedback * reverb_mix
+
+        # Update index
+        self._reverb_index = (start_idx + n_frames) % buf_len
         return out
 
     def _apply_bitcrush(self, mix: np.ndarray, depth: float) -> np.ndarray:

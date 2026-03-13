@@ -7,6 +7,7 @@
 #include "microbit_v2.h"
 
 #include "control_protocol.h"
+#include "display_host.h"
 #include "hw_config.h"
 #include "i2c_simple.h"
 #include "oled_64x48.h"
@@ -14,7 +15,7 @@
 #include "touch_sensor.h"
 #include "vl53l0x_min.h"
 
-#define LINE_BUF_SIZE 24
+#define LINE_BUF_SIZE 32
 /* Poll period: touch and encoder button are polled here; encoder rotation is interrupt-driven (GPIOTE). */
 #define MAIN_LOOP_MS 10
 #define HEARTBEAT_INTERVAL_MS 1000
@@ -32,7 +33,7 @@ static const uint32_t touch_pins[NUM_TOUCH_PADS] = {
 };
 
 static const char *slot_names[NUM_SLOTS] = {
-    "FILTER",
+    "DRIVE",
     "DELAY",
     "REVERB",
     "BITCRSH",
@@ -66,54 +67,90 @@ static uint8_t wrap_slot_index(int slot_index) {
     return (uint8_t)(slot_index % NUM_SLOTS);
 }
 
+/* Depth 0-100 -> 2-char bar for compact display. Shows bars earlier. */
+static void depth_to_bar2(uint8_t depth, char *out) {
+    /* depth 1-49 = one bar, depth 50-100 = two bars */
+    unsigned int n = 0;
+    if (depth >= 50) {
+        n = 2;
+    } else if (depth >= 1) {
+        n = 1;
+    }
+    out[0] = (n >= 1) ? '=' : ' ';
+    out[1] = (n >= 2) ? '=' : ' ';
+    out[2] = '\0';
+}
+
 static void update_oled_status(bool oled_ok,
                                bool tof_valid,
                                uint16_t tof_mm,
                                uint8_t slot_index,
                                bool slice_edit_mode,
                                bool effect_enabled,
-                               bool encoder_button,
-                               const bool *touch_states) {
+                               const bool *touch_states,
+                               const display_host_state_t *host) {
     char line[LINE_BUF_SIZE];
+    uint8_t disp_slot = slot_index;
+    bool disp_slice = slice_edit_mode;
+    bool disp_eff_on = effect_enabled;
+    bool use_host = (host != NULL && host->host_updated);
 
     if (!oled_ok) {
         return;
     }
 
+    if (use_host) {
+        disp_slot = host->slot;
+        disp_slice = host->slice_edit;
+        disp_eff_on = (host->slot < 4) ? host->effect_on[host->slot] : false;
+    }
+
     oled_clear();
-    /* Only show "SLICE EDIT" when actually in slice-edit (entered by button); else show slot. */
-    if (slice_edit_mode) {
-        snprintf(line, sizeof(line), "SLICE EDIT");
-    } else if (slot_index == (NUM_SLOTS - 1)) {
-        snprintf(line, sizeof(line), "%s (BTN)", slot_names[slot_index]);
+    if (disp_slice) {
+        snprintf(line, sizeof(line), "SLICE P%u", (unsigned int)(use_host ? host->edit_pad : 0));
+    } else if (disp_slot == (NUM_SLOTS - 1)) {
+        snprintf(line, sizeof(line), "%s (BTN)", slot_names[disp_slot]);
     } else {
         snprintf(line, sizeof(line), "%s %s",
-                 slot_names[slot_index],
-                 effect_enabled ? "ON" : "OFF");
+                 slot_names[disp_slot],
+                 disp_eff_on ? "ON" : "OFF");
     }
     oled_draw_string(0, 0, line);
 
     if (tof_valid) {
         snprintf(line, sizeof(line), "TOF %u mm", (unsigned int)tof_mm);
     } else {
-        snprintf(line, sizeof(line), "TOF NO DATA");
+        snprintf(line, sizeof(line), "TOF --");
     }
     oled_draw_string(0, 1, line);
 
-    snprintf(line, sizeof(line), "T:%c%c%c%c B:%u",
-             touch_states[0] ? '1' : '-',
-             touch_states[1] ? '2' : '-',
-             touch_states[2] ? '3' : '-',
-             touch_states[3] ? '4' : '-',
-             encoder_button ? 1u : 0u);
+    /* Pad bar: playing (from host) or touch (local). */
+    snprintf(line, sizeof(line), "P:%c%c%c%c",
+             (use_host ? host->playing[0] : touch_states[0]) ? '*' : '-',
+             (use_host ? host->playing[1] : touch_states[1]) ? '*' : '-',
+             (use_host ? host->playing[2] : touch_states[2]) ? '*' : '-',
+             (use_host ? host->playing[3] : touch_states[3]) ? '*' : '-');
     oled_draw_string(0, 2, line);
 
-    oled_draw_string(0, 3, "USB CTRL READY");
+    /* Effect depth bars: F D R B (2 chars each) on one line. */
+    if (use_host) {
+        char b0[4], b1[4], b2[4], b3[4];
+        depth_to_bar2(host->effect_depth[0], b0);
+        depth_to_bar2(host->effect_depth[1], b1);
+        depth_to_bar2(host->effect_depth[2], b2);
+        depth_to_bar2(host->effect_depth[3], b3);
+        snprintf(line, sizeof(line), "O:%s D:%s R:%s B:%s", b0, b1, b2, b3);
+        oled_draw_string(0, 3, line);
+    } else {
+        snprintf(line, sizeof(line), "O:   D:   R:   B:   ");
+        oled_draw_string(0, 3, line);
+    }
     oled_display();
 }
 
 int main(void) {
     printf("CE346 air sampler controller\n");
+    display_host_init();
 
     /* Init I2C on Qwiic bus (P19/P20) */
     if (!i2c_init_bus_with_pins(I2C_QWIIC_SCL, I2C_QWIIC_SDA)) {
@@ -238,6 +275,8 @@ int main(void) {
             last_encoder_button = encoder_button;
         }
 
+        display_host_poll();
+
         if (tof_available) {
             uint16_t raw_distance_mm = 0;
             if (vl53l0x_read_distance_mm(&raw_distance_mm)) {
@@ -260,14 +299,16 @@ int main(void) {
             }
         }
 
+        display_host_state_t host_state;
+        display_host_get_state(&host_state);
         update_oled_status(oled_ok,
                            tof_valid,
                            tof_smoothed_mm,
                            slot_index,
                            slice_edit_mode,
                            effect_enabled,
-                           encoder_button,
-                           touch_states);
+                           touch_states,
+                           &host_state);
 
         if ((elapsed_ms - last_heartbeat_ms) >= HEARTBEAT_INTERVAL_MS) {
             control_protocol_emit_heartbeat(tof_smoothed_mm,

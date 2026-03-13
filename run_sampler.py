@@ -42,13 +42,20 @@ def main() -> None:
     serial_controller = SerialController(args.port, baudrate=args.baudrate)
 
     print("[host] ready")
+    time.sleep(0.35)
+    mapper._send_disp(engine, serial_controller)
+    last_disp_heartbeat = time.monotonic()
     try:
         while True:
             event = serial_controller.read_event()
             if event is None:
+                if time.monotonic() - last_disp_heartbeat >= 0.5:
+                    mapper._send_disp(engine, serial_controller)
+                    last_disp_heartbeat = time.monotonic()
                 time.sleep(0.005)
                 continue
-            mapper.handle_event(event, engine)
+            mapper.handle_event(event, engine, serial_controller)
+            last_disp_heartbeat = time.monotonic()
     except KeyboardInterrupt:
         print("\n[host] stopping")
     finally:

@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import time
+
 from host_audio.audio_engine import AudioEngine
-from host_audio.serial_input import Event
+from host_audio.serial_input import Event, SerialController
+
+# Throttle DISP to avoid flooding the device (reduces interrupt storm at startup).
+DISP_THROTTLE_S = 0.12
 
 # Encoder slots: 0–3 = effects, 4 = slice-edit mode.
 EFFECTS = ("filter", "delay", "reverb", "bitcrush")
@@ -30,6 +35,8 @@ class ControllerMapper:
         self._edit_pad = 0
         # Slice length preset index per pad (0–3 for 250/500/750/1000 ms).
         self._slice_length_index: list[int] = [1, 1, 1, 1]
+        self._last_disp_line: str = ""
+        self._last_disp_time: float = 0.0
 
     @property
     def effect_index(self) -> int:
@@ -39,26 +46,28 @@ class ControllerMapper:
     def is_slice_edit_mode(self) -> bool:
         return self._slice_edit_mode
 
-    def handle_event(self, event: Event, engine: AudioEngine) -> None:
+    def handle_event(
+        self,
+        event: Event,
+        engine: AudioEngine,
+        serial: SerialController | None = None,
+    ) -> None:
         if event.kind == "PAD_DOWN":
             self._handle_pad_down(int(event.value), engine)
-            return
-        if event.kind == "PAD_HOLD":
+        elif event.kind == "PAD_HOLD":
             self._handle_pad_hold(int(event.value), engine)
-            return
-        if event.kind == "PAD_UP":
-            return
-        if event.kind == "ENC_DELTA":
+        elif event.kind == "PAD_UP":
+            pass
+        elif event.kind == "ENC_DELTA":
             self._handle_encoder_delta(int(event.value), engine)
-            return
-        if event.kind == "ENC_BTN" and int(event.value) == 1:
+        elif event.kind == "ENC_BTN" and int(event.value) == 1:
             self._handle_encoder_button(engine)
-            return
-        if event.kind == "TOF":
+        elif event.kind == "TOF":
             self._handle_tof(int(event.value), engine)
-            return
-        if event.kind == "HEARTBEAT":
+        elif event.kind == "HEARTBEAT":
             print(f"[control] heartbeat {event.payload}")
+        if serial is not None:
+            self._send_disp(engine, serial)
 
     def _handle_pad_down(self, pad: int, engine: AudioEngine) -> None:
         if pad < 0 or pad > 3:
@@ -168,6 +177,31 @@ class ControllerMapper:
         start, _ = bounds
         engine.set_clip(self._edit_pad, start, length_samples)
         print(f"[control] slice pad {self._edit_pad} length -> {ms} ms")
+
+    def _send_disp(self, engine: AudioEngine, serial: SerialController) -> None:
+        """Send DISP line to device for OLED sync; throttled to avoid flooding."""
+        playing = engine.get_playing_pads()
+        states = engine.get_effect_states()
+        # Use engine state for ON/OFF so display matches actual effect enabled state
+        v = "".join(
+            "1" if states.get(n, {}).get("enabled", False) else "0" for n in EFFECTS
+        )
+        d = ",".join(
+            str(int(states.get(n, {}).get("depth", 0.0) * 100))
+            for n in EFFECTS
+        )
+        P = "".join("1" if playing[i] else "0" for i in range(4))
+        line = (
+            f"DISP s={self._slot_index} e={1 if self._slice_edit_mode else 0} "
+            f"p={self._edit_pad} v={v} d={d} P={P}"
+        )
+        now = time.monotonic()
+        if line != self._last_disp_line or (now - self._last_disp_time) >= DISP_THROTTLE_S:
+            serial.send_line(line)
+            # Debug: log what we send so we can compare with device
+            print(f"[DISP] s={self._slot_index} v={v} d={d}")
+            self._last_disp_line = line
+            self._last_disp_time = now
 
     @staticmethod
     def _map_tof_to_depth(distance_mm: int) -> float:

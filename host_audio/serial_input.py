@@ -49,6 +49,16 @@ class SerialController:
             self._serial.close()
             self._serial = None
 
+    def send_line(self, line: str) -> None:
+        """Send a line to the device (e.g. DISP for display sync)."""
+        if self._serial is None:
+            return
+        try:
+            self._serial.write((line + "\n").encode("utf-8"))
+            self._serial.flush()
+        except SerialException:
+            pass
+
     def read_event(self) -> Event | None:
         if self._serial is None:
             self._connect()
