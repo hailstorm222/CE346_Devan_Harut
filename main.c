@@ -15,24 +15,28 @@
 #include "vl53l0x_min.h"
 
 #define LINE_BUF_SIZE 24
-#define MAIN_LOOP_MS 20
+/* Poll period: touch and encoder button are polled here; encoder rotation is interrupt-driven (GPIOTE). */
+#define MAIN_LOOP_MS 10
 #define HEARTBEAT_INTERVAL_MS 1000
 #define PAD_HOLD_MS 250
+/* TOF: clamp to 50-400 mm for effect depth; smooth with 1/4 blend; re-report when change >= step. */
 #define TOF_MIN_MM 50
 #define TOF_MAX_MM 400
 #define TOF_REPORT_STEP_MM 15
 #define TOF_SMOOTH_SHIFT 2
-#define NUM_EFFECTS 4
+/* Encoder slots: 4 effects + 1 slice-edit mode to match host. */
+#define NUM_SLOTS 5
 
 static const uint32_t touch_pins[NUM_TOUCH_PADS] = {
     TOUCH_PIN_0, TOUCH_PIN_1, TOUCH_PIN_2, TOUCH_PIN_3
 };
 
-static const char *effect_names[NUM_EFFECTS] = {
+static const char *slot_names[NUM_SLOTS] = {
     "FILTER",
     "DELAY",
     "REVERB",
-    "STUTTER",
+    "BITCRSH",
+    "SLICE",
 };
 
 static uint16_t clamp_tof_mm(uint16_t distance_mm) {
@@ -55,17 +59,18 @@ static int8_t encoder_delta_from_position(uint8_t current, uint8_t previous) {
     return (int8_t)delta;
 }
 
-static uint8_t wrap_effect_index(int effect_index) {
-    while (effect_index < 0) {
-        effect_index += NUM_EFFECTS;
+static uint8_t wrap_slot_index(int slot_index) {
+    while (slot_index < 0) {
+        slot_index += NUM_SLOTS;
     }
-    return (uint8_t)(effect_index % NUM_EFFECTS);
+    return (uint8_t)(slot_index % NUM_SLOTS);
 }
 
 static void update_oled_status(bool oled_ok,
                                bool tof_valid,
                                uint16_t tof_mm,
-                               uint8_t effect_index,
+                               uint8_t slot_index,
+                               bool slice_edit_mode,
                                bool effect_enabled,
                                bool encoder_button,
                                const bool *touch_states) {
@@ -76,9 +81,16 @@ static void update_oled_status(bool oled_ok,
     }
 
     oled_clear();
-    snprintf(line, sizeof(line), "%s %s",
-             effect_names[effect_index],
-             effect_enabled ? "ON" : "OFF");
+    /* Only show "SLICE EDIT" when actually in slice-edit (entered by button); else show slot. */
+    if (slice_edit_mode) {
+        snprintf(line, sizeof(line), "SLICE EDIT");
+    } else if (slot_index == (NUM_SLOTS - 1)) {
+        snprintf(line, sizeof(line), "%s (BTN)", slot_names[slot_index]);
+    } else {
+        snprintf(line, sizeof(line), "%s %s",
+                 slot_names[slot_index],
+                 effect_enabled ? "ON" : "OFF");
+    }
     oled_draw_string(0, 0, line);
 
     if (tof_valid) {
@@ -167,7 +179,8 @@ int main(void) {
 
     uint8_t last_encoder_pos = rotary_encoder_get_position();
     bool last_encoder_button = rotary_encoder_button_pressed();
-    uint8_t effect_index = 0;
+    uint8_t slot_index = 0;
+    bool slice_edit_mode = false;
     bool effect_enabled = true;
 
     bool tof_valid = false;
@@ -178,6 +191,7 @@ int main(void) {
     uint32_t last_heartbeat_ms = 0;
 
     while (1) {
+        /* Encoder rotation is handled by GPIOTE ISR; we only poll the encoder button and touch here. */
         rotary_encoder_poll();
         (void)touch_sensor_read_array(touch, touch_states, NUM_TOUCH_PADS);
 
@@ -203,7 +217,10 @@ int main(void) {
         int8_t encoder_delta = encoder_delta_from_position(encoder_pos, last_encoder_pos);
         if (encoder_delta != 0) {
             control_protocol_emit_encoder_delta(encoder_delta);
-            effect_index = wrap_effect_index((int)effect_index + (int)encoder_delta);
+            /* In slice-edit mode, encoder moves slice start; do not change displayed slot. */
+            if (!slice_edit_mode) {
+                slot_index = wrap_slot_index((int)slot_index + (int)encoder_delta);
+            }
             last_encoder_pos = encoder_pos;
         }
 
@@ -211,7 +228,12 @@ int main(void) {
         if (encoder_button != last_encoder_button) {
             control_protocol_emit_encoder_button(encoder_button);
             if (encoder_button) {
-                effect_enabled = !effect_enabled;
+                if (slot_index == (NUM_SLOTS - 1)) {
+                    /* SLICE slot: button toggles slice-edit mode (enter/exit). */
+                    slice_edit_mode = !slice_edit_mode;
+                } else if (!slice_edit_mode) {
+                    effect_enabled = !effect_enabled;
+                }
             }
             last_encoder_button = encoder_button;
         }
@@ -241,7 +263,8 @@ int main(void) {
         update_oled_status(oled_ok,
                            tof_valid,
                            tof_smoothed_mm,
-                           effect_index,
+                           slot_index,
+                           slice_edit_mode,
                            effect_enabled,
                            encoder_button,
                            touch_states);
@@ -249,7 +272,7 @@ int main(void) {
         if ((elapsed_ms - last_heartbeat_ms) >= HEARTBEAT_INTERVAL_MS) {
             control_protocol_emit_heartbeat(tof_smoothed_mm,
                                             tof_valid,
-                                            effect_index,
+                                            slot_index,
                                             effect_enabled,
                                             touch_states,
                                             NUM_TOUCH_PADS);

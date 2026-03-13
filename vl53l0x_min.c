@@ -1,3 +1,9 @@
+/*
+ * VL53L0X minimal driver: presence, optional init, ID, single-shot distance in mm.
+ * Result format matches ST API: read 12 bytes from 0x14; range in mm at bytes 10-11
+ * (registers 0x1E = MSB, 0x1F = LSB), i.e. raw = (buf[10]<<8)|buf[11].
+ * 8190 (0x1FFE) = no target / out of range; we report 2000 mm then main clamps to 50-400.
+ */
 #include "vl53l0x_min.h"
 
 #include <stdbool.h>
@@ -79,15 +85,13 @@ bool vl53l0x_read_distance_mm(uint16_t* distance_mm) {
         return false;
     }
 
-    /* Range at bytes 10-11 (registers 0x1E-0x1F).
-     * VL53L0X stores in BIG-ENDIAN: buf[10]=MSB, buf[11]=LSB.
-     * Previous code had bytes swapped, causing 20mm to read as 5120! */
+    /* Range at bytes 10-11 (registers 0x1E-0x1F). ST API: MAKEUINT16(localBuffer[11], localBuffer[10])
+     * => (buf[10]<<8)|buf[11] (MSB first). Do not swap; swapped gives 20 mm as 5120. */
     uint16_t raw = (uint16_t)((buf[10] << 8) | buf[11]);
 
-    /* With correct byte order, raw should be in mm directly (no scaling needed).
-     * 8190 (0x1FFE) = no target / out of range. */
+    /* 8190 (0x1FFE) = no target. Main clamps to TOF_MIN_MM..TOF_MAX_MM (50-400) for effect depth. */
     if (raw >= 8190) {
-        *distance_mm = 2000;  /* Cap at 2000mm for out-of-range */
+        *distance_mm = 2000;
     } else {
         *distance_mm = raw;
     }

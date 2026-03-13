@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import time
+from pathlib import Path
+
+# Allow running from any directory: add this app folder to path so host_audio is found
+_APP_DIR = Path(__file__).resolve().parent
+if str(_APP_DIR) not in sys.path:
+    sys.path.insert(0, str(_APP_DIR))
 
 from host_audio.audio_engine import AudioEngine
 from host_audio.controller_mapping import ControllerMapper
@@ -20,7 +27,14 @@ def main() -> None:
     args = parse_args()
 
     engine = AudioEngine()
-    engine.load_sample(args.sample)
+    try:
+        engine.load_sample(args.sample)
+    except FileNotFoundError:
+        print(f"[host] error: sample file not found: {args.sample}")
+        sys.exit(1)
+    except ValueError as e:
+        print(f"[host] error: {e}")
+        sys.exit(1)
     engine.start()
     engine.set_effect("filter")
 
