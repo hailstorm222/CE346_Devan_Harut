@@ -6,7 +6,6 @@
 
 #include "i2c_simple.h"
 
-/* SparkFun Qwiic OLED 1.3" (LCD-23453) is 128x64 */
 #define OLED_W 128
 #define OLED_H 64
 #define OLED_PAGES (OLED_H / 8)

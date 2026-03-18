@@ -14,24 +14,13 @@
 
 /*
  * Rotary encoder (5-pin: 2 on one side, 3 on the other). 24 detents.
- * WIRING (try both; one side is encoder, the other is button + power):
- *
- * Option A - 3-pin side = encoder, 2-pin = button + GND:
- *   Encoder:  GND -> micro:bit GND,  CLK (or A) -> ENC_PIN_A (P8),  DT (or B) -> ENC_PIN_B (P9)
- *   Button:   one pin -> ENC_PIN_SW (P12),  other pin -> GND  (button shorts to GND when pressed)
- *
- * Option B - 2-pin side = encoder, 3-pin = VCC/GND/SW:
- *   Encoder:  A/CLK -> ENC_PIN_A (P8),  B/DT -> ENC_PIN_B (P9)
- *   Button:   SW -> ENC_PIN_SW (P12),  GND -> GND.  (VCC -> 3V if needed)
- *
- * Use internal pull-ups; encoder and button are active-low (pull to GND).
  */
 #define ENC_PIN_A   EDGE_P8   /* Phase A / CLK */
 #define ENC_PIN_B   EDGE_P9   /* Phase B / DT  */
 #define ENC_PIN_SW  EDGE_P12  /* Push button (active-low) */
 
 /*
- * Capacitive touch: 4 pads on edge connector P1–P4 (input wire per pad).
+ * Capacitive touch: 4 pads on edge connector 
  */
 #define TOUCH_PIN_0  EDGE_P1
 #define TOUCH_PIN_1  EDGE_P2

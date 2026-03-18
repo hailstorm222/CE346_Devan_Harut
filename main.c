@@ -16,11 +16,11 @@
 #include "vl53l0x_min.h"
 
 #define LINE_BUF_SIZE 32
-/* Poll period: touch and encoder button are polled here; encoder rotation is interrupt-driven (GPIOTE). */
+/* Poll period */
 #define MAIN_LOOP_MS 10
 #define HEARTBEAT_INTERVAL_MS 1000
 #define PAD_HOLD_MS 250
-/* TOF: clamp to 50-400 mm for effect depth; smooth with 1/4 blend; re-report when change >= step. */
+/* TOF */
 #define TOF_MIN_MM 50
 #define TOF_MAX_MM 400
 #define TOF_REPORT_STEP_MM 15
@@ -67,7 +67,6 @@ static uint8_t wrap_slot_index(int slot_index) {
     return (uint8_t)(slot_index % NUM_SLOTS);
 }
 
-/* Depth 0-100 -> 2-char bar for compact display. Shows bars earlier. */
 static void depth_to_bar2(uint8_t depth, char *out) {
     /* depth 1-49 = one bar, depth 50-100 = two bars */
     unsigned int n = 0;
@@ -124,7 +123,6 @@ static void update_oled_status(bool oled_ok,
     }
     oled_draw_string(0, 1, line);
 
-    /* Pad bar: playing (from host) or touch (local). */
     snprintf(line, sizeof(line), "P:%c%c%c%c",
              (use_host ? host->playing[0] : touch_states[0]) ? '*' : '-',
              (use_host ? host->playing[1] : touch_states[1]) ? '*' : '-',
@@ -132,7 +130,6 @@ static void update_oled_status(bool oled_ok,
              (use_host ? host->playing[3] : touch_states[3]) ? '*' : '-');
     oled_draw_string(0, 2, line);
 
-    /* Effect depth bars: F D R B (2 chars each) on one line. */
     if (use_host) {
         char b0[4], b1[4], b2[4], b3[4];
         depth_to_bar2(host->effect_depth[0], b0);
@@ -152,13 +149,11 @@ int main(void) {
     printf("CE346 air sampler controller\n");
     display_host_init();
 
-    /* Init I2C on Qwiic bus (P19/P20) */
     if (!i2c_init_bus_with_pins(I2C_QWIIC_SCL, I2C_QWIIC_SDA)) {
         printf("ERROR I2C_INIT\n");
         while (1) { nrf_delay_ms(1000); }
     }
 
-    /* Init OLED - try 0x3D first (your scan found it), then 0x3C */
     bool oled_ok = false;
     uint8_t oled_addr = 0;
 
@@ -201,11 +196,9 @@ int main(void) {
         }
     }
 
-    /* Rotary encoder: P8 (A), P9 (B), P12 (button). */
     rotary_encoder_init();
     printf("ENC_READY\n");
 
-    /* Capacitive touch: 4 pads on P1–P4 (see hw_config.h). */
     touch_sensor_t touch[NUM_TOUCH_PADS];
     bool touch_states[NUM_TOUCH_PADS];
     bool touch_prev[NUM_TOUCH_PADS] = {false};
@@ -228,7 +221,6 @@ int main(void) {
     uint32_t last_heartbeat_ms = 0;
 
     while (1) {
-        /* Encoder rotation is handled by GPIOTE ISR; we only poll the encoder button and touch here. */
         rotary_encoder_poll();
         (void)touch_sensor_read_array(touch, touch_states, NUM_TOUCH_PADS);
 
@@ -254,7 +246,6 @@ int main(void) {
         int8_t encoder_delta = encoder_delta_from_position(encoder_pos, last_encoder_pos);
         if (encoder_delta != 0) {
             control_protocol_emit_encoder_delta(encoder_delta);
-            /* In slice-edit mode, encoder moves slice start; do not change displayed slot. */
             if (!slice_edit_mode) {
                 slot_index = wrap_slot_index((int)slot_index + (int)encoder_delta);
             }
@@ -266,7 +257,6 @@ int main(void) {
             control_protocol_emit_encoder_button(encoder_button);
             if (encoder_button) {
                 if (slot_index == (NUM_SLOTS - 1)) {
-                    /* SLICE slot: button toggles slice-edit mode (enter/exit). */
                     slice_edit_mode = !slice_edit_mode;
                 } else if (!slice_edit_mode) {
                     effect_enabled = !effect_enabled;

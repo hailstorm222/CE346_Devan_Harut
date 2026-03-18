@@ -5,14 +5,12 @@ import time
 from host_audio.audio_engine import AudioEngine
 from host_audio.serial_input import Event, SerialController
 
-# Throttle DISP to avoid flooding the device (reduces interrupt storm at startup).
 DISP_THROTTLE_S = 0.12
 
 # Encoder slots: 0–3 = effects, 4 = slice-edit mode.
 EFFECTS = ("filter", "delay", "reverb", "bitcrush")
 ENCODER_SLOTS = (*EFFECTS, "slice_edit")
 
-# Slice length presets (ms); TOF maps 50–400 mm to these.
 SLICE_LENGTH_MS = (250, 500, 750, 1000)
 
 
@@ -23,17 +21,16 @@ class ControllerMapper:
         # Encoder slot 0–4: 0–3 = effect, 4 = SLICE (must press button to enter edit).
         self._slot_index = 0
         self._last_effect_slot = 0
-        # True only after user presses encoder button while on SLICE slot.
         self._slice_edit_mode = False
         # Per-effect enabled flags for layering.
         self._effect_enabled: dict[str, bool] = {
             name: False for name in EFFECTS
         }
-        # Per-pad loop state: True if pad is currently looping (play mode only).
+        # Per-pad loop state
         self._pad_looping: list[bool] = [False, False, False, False]
         # Slice-edit: which pad is being edited (0–3).
         self._edit_pad = 0
-        # Slice length preset index per pad (0–3 for 250/500/750/1000 ms).
+
         self._slice_length_index: list[int] = [1, 1, 1, 1]
         self._last_disp_line: str = ""
         self._last_disp_time: float = 0.0
@@ -105,7 +102,7 @@ class ControllerMapper:
         if self.is_slice_edit_mode:
             self._slice_edit_move_start(delta, engine)
             return
-        # Play mode: cycle effect slot (0–4). Encoder rotation changes slot.
+
         self._slot_index = (self._slot_index + delta) % len(ENCODER_SLOTS)
         slot_name = ENCODER_SLOTS[self._slot_index]
         if slot_name != "slice_edit":
@@ -128,14 +125,14 @@ class ControllerMapper:
 
     def _handle_encoder_button(self, engine: AudioEngine) -> None:
         if self.is_slice_edit_mode:
-            # Exit slice-edit: back to last effect slot.
+
             self._slice_edit_mode = False
             self._slot_index = self._last_effect_slot
             slot_name = ENCODER_SLOTS[self._slot_index]
             engine.set_effect(slot_name)
             print(f"[control] exit slice_edit -> {slot_name}")
             return
-        # On SLICE slot (index 4): press enters slice-edit; no effect toggle.
+
         if ENCODER_SLOTS[self._slot_index] == "slice_edit":
             self._slice_edit_mode = True
             print(f"[control] enter slice_edit")
@@ -162,7 +159,7 @@ class ControllerMapper:
         print(f"[control] depth[{effect_name}] -> {depth:.2f}")
 
     def _slice_edit_set_length(self, distance_mm: int, engine: AudioEngine) -> None:
-        # Map 50–400 mm to preset index 0–3 (250, 500, 750, 1000 ms).
+
         clipped = min(max(distance_mm, 50), 400)
         t = (clipped - 50) / 350.0
         idx = min(3, int(t * 4)) if t < 1.0 else 3
@@ -182,7 +179,7 @@ class ControllerMapper:
         """Send DISP line to device for OLED sync; throttled to avoid flooding."""
         playing = engine.get_playing_pads()
         states = engine.get_effect_states()
-        # Use engine state for ON/OFF so display matches actual effect enabled state
+
         v = "".join(
             "1" if states.get(n, {}).get("enabled", False) else "0" for n in EFFECTS
         )
@@ -198,7 +195,7 @@ class ControllerMapper:
         now = time.monotonic()
         if line != self._last_disp_line or (now - self._last_disp_time) >= DISP_THROTTLE_S:
             serial.send_line(line)
-            # Debug: log what we send so we can compare with device
+
             print(f"[DISP] s={self._slot_index} v={v} d={d}")
             self._last_disp_line = line
             self._last_disp_time = now

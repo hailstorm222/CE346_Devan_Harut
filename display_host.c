@@ -1,7 +1,5 @@
 /*
  * Receives DISP lines from host over UART and parses into display_host_state_t.
- * The board UART handler calls display_host_rx_done(byte); we implement it here
- * so RX bytes reach the parser. Call display_host_poll() in main loop.
  */
 #include "display_host.h"
 
@@ -80,7 +78,6 @@ void display_host_init(void) {
     }
 }
 
-/* Strong definition: board calls this on UART RX_DONE so host DISP lines are received. */
 void display_host_rx_done(uint8_t byte) {
     display_host_rx_byte(byte);
 }
@@ -95,7 +92,7 @@ void display_host_rx_byte(uint8_t byte) {
     } else if (s_line_len < RX_LINE_BUF_SIZE - 1 && byte >= ' ') {
         s_line_buf[s_line_len++] = (char)byte;
     }
-    /* Always start next RX so we keep receiving (critical: was missing after newline). */
+
     (void)nrf_drv_uart_rx(&m_uart, &s_rx_byte, 1);
 }
 

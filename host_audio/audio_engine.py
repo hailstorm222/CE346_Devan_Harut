@@ -31,7 +31,6 @@ class AudioEngine:
         # Per-pad clip bounds: (start_sample, end_sample)
         self._clip_bounds: list[tuple[int, int]] = []
         self._voices: list[Voice] = []
-        # Effect chain and per-effect state for layering
         self._effect_names = ("filter", "delay", "reverb", "bitcrush")
         self._active_effect = self._effect_names[0]
         self._effect_states: dict[str, dict[str, float | bool]] = {
@@ -66,7 +65,7 @@ class AudioEngine:
         elif data.shape[1] > self.channels:
             data = data[:, :self.channels]
 
-        # Default per-pad clips: pick 4 random ~1 second slices from the file.
+        # pick 4 random ~1 second slices from the file.
         total_frames = data.shape[0]
         bounds: list[tuple[int, int]] = []
         clip_len = self.sample_rate  # ~1 second
@@ -112,7 +111,6 @@ class AudioEngine:
     def loop_slice(self, slice_id: int, enabled: bool) -> None:
         with self._lock:
             if enabled:
-                # If a looping voice already exists for this pad, keep it.
                 if any(voice.slice_id == slice_id and voice.looping for voice in self._voices):
                     return
                 start, end = self._clip_bounds[slice_id]
@@ -202,7 +200,6 @@ class AudioEngine:
             for voice in self._voices:
                 frame_index = 0
                 clip_len = voice.end - voice.start
-                # Crossfade at loop boundary (e.g. ~15 ms) for smoother looping; skip if clip too short.
                 crossfade_len = min(
                     int(self.sample_rate * 0.015),
                     max(0, clip_len // 2 - 1),
@@ -295,15 +292,12 @@ class AudioEngine:
         n_frames = mix.shape[0]
         buf_len = self._delay_buffer.shape[0]
 
-        # Build index arrays for reading from delay buffer
         start_idx = self._delay_index
         read_indices = (np.arange(n_frames) + start_idx - delay_samples) % buf_len
         write_indices = (np.arange(n_frames) + start_idx) % buf_len
 
-        # Read delayed samples
         delayed = self._delay_buffer[read_indices]
 
-        # Compute output
         out = (1.0 - wet) * mix + wet * delayed
 
         # Write to delay buffer (mix + feedback * delayed)
@@ -331,7 +325,6 @@ class AudioEngine:
         indices_c = (base_indices - tap_c) % buf_len
         write_indices = base_indices % buf_len
 
-        # Read from reverb buffer
         delayed_a = self._reverb_buffer[indices_a]
         delayed_b = self._reverb_buffer[indices_b]
         delayed_c = self._reverb_buffer[indices_c]
@@ -339,22 +332,17 @@ class AudioEngine:
         # Combine taps
         reverb_mix = 0.5 * delayed_a + 0.3 * delayed_b + 0.2 * delayed_c
 
-        # Compute output
         out = (1.0 - wet) * mix + wet * reverb_mix
 
-        # Write to reverb buffer
         self._reverb_buffer[write_indices] = mix + feedback * reverb_mix
 
-        # Update index
         self._reverb_index = (start_idx + n_frames) % buf_len
         return out
 
     def _apply_bitcrush(self, mix: np.ndarray, depth: float) -> np.ndarray:
         """Simple bitcrusher: reduce amplitude resolution based on depth."""
-        # Map depth 0..1 to bit depth ~16 -> ~4
         bits = int(round(16 - 12 * depth))
         bits = max(4, min(16, bits))
         levels = float(2 ** bits)
-        # Quantize around zero; this is intentionally lo-fi.
         out = np.round(mix * levels) / levels
         return out

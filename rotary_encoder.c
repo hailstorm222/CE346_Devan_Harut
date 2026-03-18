@@ -7,11 +7,11 @@
 #include "nrf_gpio.h"
 #include "nrfx_gpiote.h"
 
-/* 24 detents: 4 quadrature steps per detent is common; use 2 if position doubles. */
+/* 24 detents */
 #define ENC_STEPS_PER_DETENT 4
 #define ENC_NUM_POSITIONS    24
 
-/* Quadrature state: 2 bits (A, B). CW sequence 0->1->2->3->0; CCW 0->3->2->1->0. */
+/* Quadrature state */
 static const int8_t quad_table[] = {
     0, -1,  1,  0,  1,  0,  0, -1, -1,  0,  0,  1,  0,  1, -1,  0
 };
@@ -41,7 +41,6 @@ void rotary_encoder_init(void) {
     enc_raw = 0;
     zero_offset = 0;
 
-    /* GPIOTE: both encoder pins trigger on any edge (toggle), pull-up. */
     if (!nrfx_gpiote_is_init()) {
         nrfx_gpiote_init();
     }
@@ -57,7 +56,6 @@ void rotary_encoder_init(void) {
     nrfx_gpiote_in_init(ENC_PIN_B, &enc_cfg, encoder_pin_handler);
     nrfx_gpiote_in_event_enable(ENC_PIN_B, true);
 
-    /* Button: polled, no interrupt */
     nrf_gpio_cfg_input(ENC_PIN_SW, NRF_GPIO_PIN_PULLUP);
     btn_curr = !nrf_gpio_pin_read(ENC_PIN_SW);
     btn_prev = btn_curr;
@@ -65,7 +63,6 @@ void rotary_encoder_init(void) {
 }
 
 void rotary_encoder_poll(void) {
-    /* Only poll the button; encoder is interrupt-driven. */
     btn_curr = !nrf_gpio_pin_read(ENC_PIN_SW);
     btn_was_pressed = btn_curr && !btn_prev;
     btn_prev = btn_curr;
